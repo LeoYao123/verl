@@ -48,25 +48,25 @@ Retool论文参考([Retool](https://arxiv.org/pdf/2504.11536))
 
 .. code-block:: bash
 
-git clone https://huggingface.co/Qwen/Qwen2.5-7B-Instruct
+  git clone https://huggingface.co/Qwen/Qwen2.5-7B-Instruct
 
 **下载训练数据集**
 
 .. code-block:: bash
 
-git clone https://huggingface.co/datasets/BytedTsinghua-SIA/DAPO-Math-17k
+  git clone https://huggingface.co/datasets/BytedTsinghua-SIA/DAPO-Math-17k
 
 **下载评估数据集**
 
 .. code-block:: bash
 
-git clone https://huggingface.co/datasets/Maxwell-Jia/AIME_2024
+  git clone https://huggingface.co/datasets/Maxwell-Jia/AIME_2024
 
 **下载预训练数据集**
 
 .. code-block:: bash
 
-python3 recipe/retool/retool_sft_preprocess.py
+  python3 recipe/retool/retool_sft_preprocess.py
 
 *注:自动下载ReTool-SFT，最后生成数据默认保存在~/ReTool-SFT/data目录下*
 
@@ -74,15 +74,15 @@ python3 recipe/retool/retool_sft_preprocess.py
 
 .. code-block:: bash
 
-bash recipe/retool/run_qwen2_7b_sft_npu.sh # 需适配脚本中路径
+  bash recipe/retool/run_qwen2_7b_sft_npu.sh # 需适配脚本中路径
 
 **合并预训练权重生成checkpoint**
 
 .. code-block:: bash
 
-python3 -m verl.model_merger merge --backend fsdp \
---local_dir ${DATASETS}/checkpoint/multiturn-sft-qwen-2.5-7b-instruct/global_step_372 \
---target_dir ${DATASETS}/checkpoint/multiturn-sft-qwen-2.5-7b-instruct/global_step_372/huggingface
+  python3 -m verl.model_merger merge --backend fsdp \
+      --local_dir ${DATASETS}/checkpoint/multiturn-sft-qwen-2.5-7b-instruct/global_step_372 \
+      --target_dir ${DATASETS}/checkpoint/multiturn-sft-qwen-2.5-7b-instruct/global_step_372/huggingface
 
 2.代码沙箱准备
 开源沙箱代码及部署参考
@@ -92,22 +92,21 @@ https://github.com/bytedance/SandboxFusion
 
 .. code-block:: bash
 
-git clone -b main https://github.com/bytedance/SandboxFusion.git
+  git clone -b main https://github.com/bytedance/SandboxFusion.git
 
 **沙箱安装**
 
 .. code-block:: bash
 
-conda create -n sandbox -y python=3.11
-conda activate sandbox
-pip install poetry
-poetry lock
-poetry install
-# to build the real docs, run `cd docs && npm ci && npm run build`
-mkdir -p docs/build
-cd runtime/python
-bash install-python-runtime.sh
-make run-online
+  conda create -n sandbox -y python=3.11
+  conda activate sandbox
+  pip install poetry
+  poetry lock
+  poetry install
+  mkdir -p docs/build
+  cd runtime/python
+  bash install-python-runtime.sh
+  make run-online
 
 3.训练
 示例配置文件如下，在recipe/retool目录下创建一个run_qwen2.5_7b_dapo_npu.sh
@@ -115,84 +114,84 @@ make run-online
 
 .. code-block:: bash 
 
-set -x
+  set -x
 
-export VLLM_USE_V1=1
-export TORCHDYNAMO_DISABLE=1
-export VLLM_ASCEND_ENABLE_NZ=0
-export TASK_QUEUE_ENABLE=1
-export VLLM_ENABLE_GRAPH_MODE=1
-export HCCL_OP_EXPANSION_MODE="AIV"
-export VLLM_ASCEND_ENABLE_MLP_OPTIMIZE=1
-export LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
+  export VLLM_USE_V1=1
+  export TORCHDYNAMO_DISABLE=1
+  export VLLM_ASCEND_ENABLE_NZ=0
+  export TASK_QUEUE_ENABLE=1
+  export VLLM_ENABLE_GRAPH_MODE=1
+  export HCCL_OP_EXPANSION_MODE="AIV"
+  export VLLM_ASCEND_ENABLE_MLP_OPTIMIZE=1
+  export LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
+  
+  # ================= data/model/tool =================
+  HDFS_ROOT=${HDFS_ROOT:-"${PWD}"}
+  DATA_ROOT=${DATA_ROOT:-"${PWD}"}
+  
+  dapo_math_17k=$DATA_ROOT/dataset/BytedTsinghua-SIA/DAPO-Math-17k
+  aime_2024=$DATA_ROOT/dataset/Maxwell-Jia/AIME_2024
+  #aime_2025=$DATA_ROOT/dataset/yentinglin/aime_2025
+  model_path=$DATA_ROOT/dataset/checkpoint/multiturn-sft-qwen-2.5-7b-instruct/  global_step_372/huggingface
+  
+  train_files="['$dapo_math_17k']"
+  test_files="['$aime_2024']"
+  
+  # tool
+  tool_config_path=recipe/retool/sandbox_fusion_tool_config.yaml
+  
+  # wandb
+  project_name=retool
+  experiment_name=qwen2.5-7b_dapo
+  default_local_dir=$DATA_ROOT/checkpoint/$experiment_name
+  
+  # 创建日志文件
+  export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+  LOG_DIR="$HDFS_ROOT/verl/logs/$project_name/$experiment_name"
+  # 判断路径是否存在
+  if [ ! -d "$LOG_DIR" ]; then
+    # 路径不存在，创建路径
+    mkdir -p "$LOG_DIR"
+    echo "Directory $LOG_DIR created."
+  else
+    echo "Directory $LOG_DIR already exists."
+  fi
+  
+  LOG_FILE="${LOG_DIR}/${TIMESTAMP}.log"
+  touch "$LOG_FILE"
+  echo "Log file $LOG_FILE created."
 
-# ================= data/model/tool =================
-HDFS_ROOT=${HDFS_ROOT:-"${PWD}"}
-DATA_ROOT=${DATA_ROOT:-"${PWD}"}
+  # ================= algorithm =================
+  adv_estimator=grpo
+  
+  use_kl_in_reward=False
+  kl_coef=0.0
+  use_kl_loss=False
+  kl_loss_coef=0.0
+  
+  clip_ratio_low=0.2
+  clip_ratio_high=0.28
+  
+  max_turns=16
+  max_prompt_length=2048
+  max_response_length=20480
+  actor_lr=1e-6
+  
+  train_batch_size=32
+  ppo_mini_batch_size=16
+  
+  n_resp_per_prompt=16
+  n_resp_per_prompt_val=30
+  
+  # ================= performance =================
+  infer_tp=2 # vllm
+  train_sp=4 # train
+  offload=True
+  
+  actor_max_token_len_per_gpu=$(( (max_prompt_length + max_response_length) * 1 ))
+  log_prob_max_token_len_per_gpu=$(( actor_max_token_len_per_gpu * 4 ))
 
-dapo_math_17k=$DATA_ROOT/dataset/BytedTsinghua-SIA/DAPO-Math-17k
-aime_2024=$DATA_ROOT/dataset/Maxwell-Jia/AIME_2024
-#aime_2025=$DATA_ROOT/dataset/yentinglin/aime_2025
-model_path=$DATA_ROOT/dataset/checkpoint/multiturn-sft-qwen-2.5-7b-instruct/global_step_372/huggingface
-
-train_files="['$dapo_math_17k']"
-test_files="['$aime_2024']"
-
-# tool
-tool_config_path=recipe/retool/sandbox_fusion_tool_config.yaml
-
-# wandb
-project_name=retool
-experiment_name=qwen2.5-7b_dapo
-default_local_dir=$DATA_ROOT/checkpoint/$experiment_name
-
-# 创建日志文件
-export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-LOG_DIR="$HDFS_ROOT/verl/logs/$project_name/$experiment_name"
-# 判断路径是否存在
-if [ ! -d "$LOG_DIR" ]; then
-  # 路径不存在，创建路径
-  mkdir -p "$LOG_DIR"
-  echo "Directory $LOG_DIR created."
-else
-  echo "Directory $LOG_DIR already exists."
-fi
-
-LOG_FILE="${LOG_DIR}/${TIMESTAMP}.log"
-touch "$LOG_FILE"
-echo "Log file $LOG_FILE created."
-
-# ================= algorithm =================
-adv_estimator=grpo
-
-use_kl_in_reward=False
-kl_coef=0.0
-use_kl_loss=False
-kl_loss_coef=0.0
-
-clip_ratio_low=0.2
-clip_ratio_high=0.28
-
-max_turns=16
-max_prompt_length=2048
-max_response_length=20480
-actor_lr=1e-6
-
-train_batch_size=32
-ppo_mini_batch_size=16
-
-n_resp_per_prompt=16
-n_resp_per_prompt_val=30
-
-# ================= performance =================
-infer_tp=2 # vllm
-train_sp=4 # train
-offload=True
-
-actor_max_token_len_per_gpu=$(( (max_prompt_length + max_response_length) * 1 ))
-log_prob_max_token_len_per_gpu=$(( actor_max_token_len_per_gpu * 4 ))
-
-PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
+  PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=$adv_estimator \
     algorithm.use_kl_in_reward=$use_kl_in_reward \
     algorithm.kl_ctrl.kl_coef=$kl_coef \
@@ -260,4 +259,3 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.ref.entropy_checkpointing=True \
     actor_rollout_ref.ref.use_torch_compile=False \
     trainer.total_epochs=1 $@ > $LOG_FILE 2>&1 &
-
