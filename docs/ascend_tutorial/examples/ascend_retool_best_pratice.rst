@@ -99,6 +99,7 @@ https://github.com/bytedance/SandboxFusion
 **沙箱安装**
 
 .. code-block:: bash
+
   cd SandboxFusion
   conda create -n sandbox -y python=3.11
   conda activate sandbox
